@@ -5,7 +5,14 @@ export const Context = createContext();
 
 const defaultName = () => `Project ${new Date().toLocaleString()}`;
 
+
 const ContextProvider = (props) => {
+
+	{/* const [state, setState] = useState(initialState) */}
+	{/* Here we use state to be the main variable and setState is used to change the value of the variable */}
+	{/* state = "Hello", setState("Hello World") then state = "Hello World", value change */}
+	{/* We can't directly change the value of state because if we do that then react can't identfy the change happened in state and can't render the change so we have to use setState function*/}
+
 	const [input, setInput] = useState("");
 	const [recentPrompt, setRecentPrompt] = useState("");
 	const [prevPrompts, setPrevPrompts] = useState([]);
@@ -15,7 +22,6 @@ const ContextProvider = (props) => {
 	const [exporting, setExporting] = useState(false);
 	const [resultData, setResultData] = useState("");
 	const [error, setError] = useState("");
-
 	const [projects, setProjects] = useState([]);
 	const [currentProject, setCurrentProject] = useState(null);
 	const [shots, setShots] = useState([]);
@@ -128,6 +134,8 @@ const ContextProvider = (props) => {
 			if (!currentProject) {
 				throw new Error("Create or open a project from the sidebar first.");
 			}
+
+			// Use a local variable so we always work with the latest shot ref
 			let shot = currentShot;
 			if (!shot) {
 				shot = await endpoints.createShot(currentProject.id, { title: "Shot" });
@@ -135,40 +143,38 @@ const ContextProvider = (props) => {
 				setCurrentShot(shot);
 			}
 
+			// Decide generate vs edit based on whether code already exists on THIS shot
 			let updated;
 			if (!shot.generated_manim_code) {
 				updated = await endpoints.generate(shot.id, text);
 			} else {
 				updated = await endpoints.edit(shot.id, text);
 			}
+
 			setCurrentShot(updated);
 			setShots((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
 
-			const codePreview =
-				updated.generated_manim_code?.slice(0, 4000) ||
-				"(no code returned)";
+			const codePreview = updated.generated_manim_code?.slice(0, 4000) || "(no code returned)";
 			setResultData(
-				`<p><b>Manim code updated.</b> Scene: <code>${updated.scene_class_name || "?"}</code></p><pre style="white-space:pre-wrap;font-size:13px;background:#f6f7f8;padding:12px;border-radius:8px;max-height:240px;overflow:auto;">${escapeHtml(
-					codePreview
-				)}</pre>`
+				`<p><b>Manim code updated.</b> Scene: <code>${updated.scene_class_name || "?"}</code></p>` +
+				`<pre style="white-space:pre-wrap;font-size:13px;background:#f6f7f8;padding:12px;border-radius:8px;max-height:240px;overflow:auto;">${escapeHtml(codePreview)}</pre>`
 			);
 
 			setLoading(false);
 			setRenderLoading(true);
+
 			const rendered = await endpoints.render(updated.id, false);
 			setCurrentShot(rendered);
 			setShots((prev) => prev.map((x) => (x.id === rendered.id ? rendered : x)));
+
 			if (!rendered.video_url) {
-				setError(
-					"Render failed. Check logs below or try Regenerate / Render with AI fix."
-				);
+				setError("Render failed. Check the log below or try Regenerate / Render + AI fix.");
 				const log = rendered.render_log || "";
 				setResultData(
 					(prev) =>
 						prev +
-						`<p style="color:#b42318">Render error</p><pre style="white-space:pre-wrap;font-size:12px;background:#fff4f4;padding:12px;border-radius:8px;max-height:200px;overflow:auto;">${escapeHtml(
-							log.slice(0, 8000)
-						)}</pre>`
+						`<p style="color:#b42318">Render error</p>` +
+						`<pre style="white-space:pre-wrap;font-size:12px;background:#fff4f4;padding:12px;border-radius:8px;max-height:200px;overflow:auto;">${escapeHtml(log.slice(0, 8000))}</pre>`
 				);
 			}
 		} catch (e) {
@@ -177,6 +183,7 @@ const ContextProvider = (props) => {
 				`<p style="color:#b42318">${escapeHtml(e.message || String(e))}</p>`
 			);
 		} finally {
+			// Always clear both loading states
 			setLoading(false);
 			setRenderLoading(false);
 			setInput("");
@@ -195,7 +202,7 @@ const ContextProvider = (props) => {
 			setCurrentShot(rendered);
 			setShots((prev) => prev.map((x) => (x.id === rendered.id ? rendered : x)));
 			if (!rendered.video_url) {
-				setError("Render failed. See render log on the shot or try AI fix.");
+				setError("Render failed. See render log or try AI fix.");
 			}
 		} catch (e) {
 			setError(e.message || String(e));
@@ -210,16 +217,29 @@ const ContextProvider = (props) => {
 			return;
 		}
 		setLoading(true);
+		setRenderLoading(false);
 		setError("");
 		try {
 			const updated = await endpoints.regenerate(currentShot.id, null);
 			setCurrentShot(updated);
 			setShots((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
-			await runRender(false);
+
+			// Transition from generate-loading to render-loading cleanly
+			setLoading(false);
+			setRenderLoading(true);
+
+			const rendered = await endpoints.render(updated.id, false);
+			setCurrentShot(rendered);
+			setShots((prev) => prev.map((x) => (x.id === rendered.id ? rendered : x)));
+			if (!rendered.video_url) {
+				setError("Render failed after regeneration. Try Render + AI fix.");
+			}
 		} catch (e) {
 			setError(e.message || String(e));
 		} finally {
+			// Always clear both states
 			setLoading(false);
+			setRenderLoading(false);
 		}
 	};
 

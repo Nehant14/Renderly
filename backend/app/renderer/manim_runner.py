@@ -38,12 +38,16 @@ async def render_shot(
     scene_path = shot_dir / "scene.py"
     scene_path.write_text(code, encoding="utf-8")
 
-    quality = settings.manim_quality.lstrip("-")  # ql -> ql
+    quality = settings.manim_quality.lstrip("-")
+    if quality.startswith("p"):
+        quality_flag = f"-{quality}"
+    else:
+        quality_flag = f"-p{quality}"
     cmd = [
         "manim",
-        f"-q{quality}",
         str(scene_path.name),
         scene_name,
+        quality_flag,
         "--media_dir",
         ".",
     ]

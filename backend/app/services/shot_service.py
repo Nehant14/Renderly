@@ -9,7 +9,7 @@ from beanie.odm.fields import PydanticObjectId
 from app.models.shot import Shot
 from app.services.ai_service import AIService, get_ai_service
 from app.services.render_service import render_shot_video
-from app.utils.code_validator import find_scene_class_name
+from app.utils.code_validator import find_scene_class_name, validate_manim_code
 from app.utils.file_storage import ensure_shot_dir
 
 
@@ -68,8 +68,34 @@ async def save_generated_code(s: Shot, code: str, prompt: Optional[str] = None) 
     s.scene_class_name = find_scene_class_name(code)
     if prompt is not None:
         s.user_prompt = prompt
+    # Clear previous render artifacts when code changes
+    s.video_path = None
+    s.render_log = None
     s.updated_at = datetime.now(timezone.utc)
     await s.save()
+    # Validate generated code; if syntax issues are detected, ask AI to fix it
+    ok, errs = validate_manim_code(code)
+    if not ok:
+        ai = get_ai_service()
+        combined_log = "\n".join(errs)
+        # Try up to 2 automatic fix attempts
+        for _ in range(2):
+            try:
+                fixed = await ai.fix_manim(code, combined_log)
+            except Exception:
+                break
+            if not fixed or fixed.strip() == code.strip():
+                break
+            code = fixed
+            s = await Shot.get(s.id)
+            s.generated_manim_code = code
+            s.scene_class_name = find_scene_class_name(code)
+            s.updated_at = datetime.now(timezone.utc)
+            await s.save()
+            ok, errs = validate_manim_code(code)
+            combined_log = combined_log + "\n--- AI FIX ATTEMPT ---\n" + ("\n".join(errs) if errs else "")
+            if ok:
+                break
     return s
 
 
@@ -81,23 +107,31 @@ async def save_render_result(s: Shot, video_rel: Optional[str], log: str) -> Sho
     return s
 
 
-async def generate_code_for_shot(shot_id: PydanticObjectId, prompt: str, ai: Optional[AIService] = None) -> Shot:
+async def generate_code_for_shot(
+    shot_id: PydanticObjectId, prompt: str, ai: Optional[AIService] = None
+) -> Shot:
     ai = ai or get_ai_service()
     s = await Shot.get(shot_id)
     if not s:
         raise ValueError("Shot not found")
     code = await ai.generate_manim(prompt)
+    if not code:
+        raise ValueError("AI returned empty code. Check your GEMINI_API_KEY.")
     return await save_generated_code(s, code, prompt=prompt)
 
 
-async def edit_code_for_shot(shot_id: PydanticObjectId, message: str, ai: Optional[AIService] = None) -> Shot:
+async def edit_code_for_shot(
+    shot_id: PydanticObjectId, message: str, ai: Optional[AIService] = None
+) -> Shot:
     ai = ai or get_ai_service()
     s = await Shot.get(shot_id)
     if not s:
         raise ValueError("Shot not found")
     if not s.generated_manim_code:
-        raise ValueError("No existing code to edit")
+        raise ValueError("No existing code to edit — send a prompt first.")
     code = await ai.edit_manim(s.generated_manim_code, message)
+    if not code:
+        raise ValueError("AI returned empty code during edit.")
     return await save_generated_code(s, code, prompt=None)
 
 
@@ -112,27 +146,48 @@ async def regenerate_shot(
         raise ValueError("Shot not found")
     base_prompt = prompt or s.user_prompt
     if not base_prompt:
-        raise ValueError("No prompt available for regeneration")
+        raise ValueError("No prompt available for regeneration.")
     code = await ai.generate_manim(base_prompt)
+    if not code:
+        raise ValueError("AI returned empty code during regeneration.")
     return await save_generated_code(s, code, prompt=base_prompt)
 
 
 async def render_shot_task(shot_id: PydanticObjectId, try_fix: bool = False) -> Shot:
-    ai = get_ai_service() if try_fix else None
+    ai = get_ai_service()
+    # Always fetch fresh from DB to avoid stale state
     s = await Shot.get(shot_id)
     if not s:
         raise ValueError("Shot not found")
     if not s.generated_manim_code:
-        raise ValueError("No code to render")
-    ok, log, rel = await render_shot_video(str(s.project_id), str(s.id), s.generated_manim_code)
-    if ok:
-        return await save_render_result(s, rel, log)
-    if try_fix and ai:
-        fixed = await ai.fix_manim(s.generated_manim_code, log)
-        s = await save_generated_code(s, fixed, prompt=None)
-        ok2, log2, rel2 = await render_shot_video(str(s.project_id), str(s.id), s.generated_manim_code)
-        log = log + "\n--- AUTO-FIX ATTEMPT ---\n" + log2
-        if ok2:
-            return await save_render_result(s, rel2, log)
-    await save_render_result(s, s.video_path, log)
-    return s
+        raise ValueError("No code to render — generate code first.")
+
+    current_code = s.generated_manim_code
+    combined_log = ""
+    fix_attempts = 0
+    render_attempts = 0
+
+    while render_attempts < 3:
+        render_attempts += 1
+        ok, log, rel = await render_shot_video(str(s.project_id), str(s.id), current_code)
+        combined_log = log if not combined_log else combined_log + "\n--- RENDER RETRY ---\n" + log
+        if ok:
+            return await save_render_result(s, rel, combined_log)
+
+        if fix_attempts >= 2:
+            break
+
+        fix_attempts += 1
+        fixed_code = await ai.fix_manim(current_code, combined_log)
+        if not fixed_code or fixed_code.strip() == current_code.strip():
+            break
+
+        s = await Shot.get(shot_id)
+        s = await save_generated_code(s, fixed_code, prompt=None)
+        current_code = fixed_code
+
+        # If the user requested an explicit fix, allow a second repair attempt.
+        if not try_fix:
+            break
+
+    return await save_render_result(s, None, combined_log)

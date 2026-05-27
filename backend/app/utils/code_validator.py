@@ -90,6 +90,7 @@ def validate_manim_code(code: str) -> Tuple[bool, List[str]]:
     Returns (ok, errors). Checks syntax, blocked imports/calls, and Scene subclass.
     """
     errors: List[str] = []
+    # Highlight: Extract code from markdown first so all subsequent checks run on clean python code
     code = extract_python_from_markdown(code)
     if not code.strip():
         return False, ["Empty code"]
@@ -99,6 +100,7 @@ def validate_manim_code(code: str) -> Tuple[bool, List[str]]:
     except SyntaxError as e:
         return False, [f"Syntax error: {e}"]
 
+    # Highlight: Now passing the cleaned code instead of raw markdown text
     scene = find_scene_class_name(code)
     if not scene:
         errors.append("No Scene subclass found (define: class YourName(Scene):)")

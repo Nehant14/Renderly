@@ -1,5 +1,14 @@
+import sys
+import asyncio
 import logging
 from contextlib import asynccontextmanager
+
+# Highlight: This must be executed at the absolute top of the file
+if sys.platform == "win32":
+    try:
+        asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    except Exception:
+        pass
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,10 +25,17 @@ from app.utils.file_storage import storage_root
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("renderly.backend")
 
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Highlight: Double check loop safety inside the dynamic worker thread lifespan
+    if sys.platform == "win32":
+        try:
+            asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+        except Exception:
+            pass
+            
     await init_db()
+    # Create storage root once, here
     storage_root().mkdir(parents=True, exist_ok=True)
     logger.info("Storage root: %s", storage_root())
     yield
@@ -41,5 +57,5 @@ app.include_router(projects_router, prefix="/api")
 app.include_router(shots_router, prefix="/api")
 app.include_router(project_shots_router, prefix="/api")
 
-storage_root().mkdir(parents=True, exist_ok=True)
+# Mount static media — directory is guaranteed to exist from lifespan above
 app.mount("/media", StaticFiles(directory=str(storage_root())), name="media")

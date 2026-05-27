@@ -6,13 +6,13 @@ import logging
 import re
 
 import google.generativeai as genai
+from google.generativeai import types as genai_types
 
 from app.config.settings import get_settings
 from app.utils.code_validator import extract_python_from_markdown
 
 logger = logging.getLogger(__name__)
 
-# Strong system prompts: raw Python only, no prose, no markdown.
 SYSTEM_GENERATE = """You are an expert Manim Community Edition animator.
 Output rules (strict):
 - Return ONLY valid Python source code for one file.
@@ -40,43 +40,63 @@ Output rules (strict):
 def _strip_noise(text: str) -> str:
     text = (text or "").strip()
     text = extract_python_from_markdown(text)
-    # If model still wrapped single-line fences
     text = re.sub(r"^```(?:python)?\s*", "", text, flags=re.IGNORECASE)
     text = re.sub(r"\s*```$", "", text, flags=re.IGNORECASE)
     return text.strip()
-
 
 class AIService:
     def __init__(self) -> None:
         s = get_settings()
         self._model_name = s.gemini_model
+        self._fallback_models = [m.strip() for m in s.gemini_fallback_models.split(",") if m.strip()]
         genai.configure(api_key=s.gemini_api_key or None)
 
     def _generate_sync(self, system_instruction: str, user_text: str) -> str:
-        model = genai.GenerativeModel(
-            model_name=self._model_name,
-            system_instruction=system_instruction,
-        )
-        resp = model.generate_content(
-            user_text,
-            generation_config={"temperature": 0.35, "max_output_tokens": 8192},
-        )
-        text = ""
-        try:
-            text = resp.text or ""
-        except ValueError:
-            # Blocked or empty candidates
-            if resp.candidates:
-                parts = []
-                for c in resp.candidates:
-                    if c.content and c.content.parts:
-                        for p in c.content.parts:
-                            if hasattr(p, "text") and p.text:
-                                parts.append(p.text)
-                text = "\n".join(parts)
-        out = _strip_noise(text)
-        logger.info("Gemini output chars=%s", len(out))
-        return out
+        model_names = [self._model_name] + [m for m in self._fallback_models if m != self._model_name]
+        last_error: Exception | None = None
+        for model_name in model_names:
+            model = genai.GenerativeModel(
+                model_name=model_name,
+                system_instruction=system_instruction,
+            )
+            generation_config = genai_types.GenerationConfig(
+                temperature=0.35,
+                max_output_tokens=8192,   # choose this correctly (8192=2^13) which is a boundary
+            )
+            try:
+                resp = model.generate_content(
+                    user_text,
+                    generation_config=generation_config,
+                )  # here we willget the main response from the model
+            except Exception as e:
+                logger.error("Gemini API call failed for model %s: %s", model_name, e)
+                last_error = e
+                # CHANGED: Allow the loop to continue to fallback models for ALL exceptions (e.g. auth, quota, etc.)
+                continue
+            text = ""
+            try:
+                text = resp.text or ""
+            except ValueError:
+                if resp.candidates:
+                    parts = []
+                    for c in resp.candidates:
+                        if c.content and c.content.parts:
+                            for p in c.content.parts:
+                                if hasattr(p, "text") and p.text:
+                                    parts.append(p.text)
+                    text = "\n".join(parts)
+            if not text:
+                # CHANGED: Don't raise instantly. Log it and let the loop check the next fallback model.
+                logger.warning("Gemini model %s returned an empty response.", model_name)
+                continue
+            out = _strip_noise(text)
+            logger.info("Gemini output chars=%s", len(out))
+            return out   # it is the main output
+        if last_error is not None:
+            raise ValueError(
+                "Gemini model not available."
+            ) from last_error
+        raise ValueError("Gemini returned empty response. Check API key and model name.")
 
     async def generate_manim(self, user_prompt: str) -> str:
         user_text = f"User animation request:\n{user_prompt}\n\nProduce the full Manim Python file now."

@@ -48,7 +48,7 @@ async def export_project_video(project_id: PydanticObjectId) -> tuple[bool, str,
     paths = []
     for s in shots:
         if s.video_path:
-            paths.append(absolute_video_path(s.video_path))
+            paths.append(absolute_video_path(s.video_path))   # appending all shot paths
     if not paths:
         return False, "No rendered shots to export", None
     out = export_final_path(str(project_id))
