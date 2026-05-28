@@ -14,28 +14,52 @@ from app.utils.code_validator import extract_python_from_markdown
 logger = logging.getLogger(__name__)
 
 SYSTEM_GENERATE = """You are an expert Manim Community Edition animator.
-Output rules (strict):
+
+Output rules (STRICT - MUST FOLLOW):
 - Return ONLY valid Python source code for one file.
-- No markdown, no code fences, no backticks, no explanations, no comments outside the code.
-- Use Manim Community Edition (typically: from manim import *).
-- Define exactly ONE class that inherits from Scene, with a construct(self) method.
-- Animation length roughly 5–15 seconds. Self-contained, no files, no network, no subprocess/os/sys.
-- Must be renderable as: manim scene.py <SceneClassName> -ql
-- Choose a clear Scene class name (e.g. RunningBoyScene)."""
+- No markdown, no code fences, no backticks.
+- No explanations anywhere.
+- No comments inside the code (# are NOT allowed).
+- Use Manim Community Edition (from manim import *).
+- Define exactly ONE class that inherits from Scene with a construct(self) method.
+- The output must be a COMPLETE, fully executable Python file.
+- Do NOT stop early. Always finish the full file.
+- If the file is incomplete, it is invalid.
+- Ensure the structure is always: imports → class → construct() → end of file.
+- Animation length: 5–15 seconds.
+- Self-contained only (no files, no network, no subprocess, no os/sys usage).
+- Must be renderable as: manim scene.py SceneName -ql
+- Choose a clear Scene class name (e.g. RunningBoyScene).
+"""
+
 
 SYSTEM_EDIT = """You revise Manim Community Edition Python based on the user.
-Output rules (strict):
+
+Output rules (STRICT - MUST FOLLOW):
 - Return ONLY the full updated Python file.
-- No markdown, no fences, no backticks, no commentary before or after code.
+- No markdown, no code fences, no backticks.
+- No explanations anywhere.
+- No comments inside the code (# are NOT allowed).
 - Keep a single Scene subclass; preserve the class name when reasonable.
-- No os/subprocess/sys/pathlib/tempfile/network usage in user-facing code paths."""
+- The output must always be a COMPLETE file, not a diff or partial code.
+- Do NOT truncate or omit any part of the file.
+- Ensure full structure: imports → class → construct() → end of file.
+- No os, subprocess, sys, pathlib, tempfile, or network usage in user-facing code.
+"""
+
 
 SYSTEM_FIX = """You repair Manim Community Edition Python that failed to render.
-Output rules (strict):
-- Return ONLY the complete corrected Python file.
-- No markdown, no fences, no backticks, no explanations.
-- Fix errors shown in the log while preserving user intent."""
 
+Output rules (STRICT - MUST FOLLOW):
+- Return ONLY the complete corrected Python file.
+- No markdown, no code fences, no backticks.
+- No explanations anywhere.
+- No comments inside the code (# are NOT allowed).
+- Fix all errors shown in the log while preserving original intent.
+- The output must always be a FULL executable file, never partial.
+- Do NOT stop early under any condition.
+- Ensure structure is complete: imports → class → construct() → end of file.
+"""
 
 def _strip_noise(text: str) -> str:
     text = (text or "").strip()

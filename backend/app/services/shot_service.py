@@ -7,6 +7,7 @@ from beanie.odm.enums import SortDirection
 from beanie.odm.fields import PydanticObjectId
 
 from app.models.shot import Shot
+import re
 from app.services.ai_service import AIService, get_ai_service
 from app.services.render_service import render_shot_video
 from app.utils.code_validator import find_scene_class_name, validate_manim_code
@@ -20,10 +21,31 @@ async def list_shots(project_id: PydanticObjectId) -> Sequence[Shot]:
 
 
 async def create_shot(project_id: PydanticObjectId, title: str = "New shot") -> Shot:
+    # Determine next sort order
     existing = await Shot.find(Shot.project_id == project_id).sort(
         ("sort_order", SortDirection.DESCENDING)
     ).limit(1).to_list()
     next_ord = (existing[0].sort_order + 1) if existing else 0
+
+    # If the caller passed a generic title like "Shot" or "New shot",
+    # auto-generate a sequential title: "Shot 1", "Shot 2", ...
+    if (title or "").strip().lower() in ("shot", "new shot", ""):
+        # Fetch all shots for this project and look for existing "Shot N" titles
+        all_shots = await Shot.find(Shot.project_id == project_id).to_list()
+        max_n = 0
+        for sh in all_shots:
+            if not sh.title:
+                continue
+            m = re.match(r"(?i)^shot\s*(\d+)$", sh.title.strip())
+            if m:
+                try:
+                    n = int(m.group(1))
+                except Exception:
+                    continue
+                if n > max_n:
+                    max_n = n
+        title = f"Shot {max_n + 1}"
+
     s = Shot(project_id=project_id, title=title, sort_order=next_ord)
     await s.insert()
     ensure_shot_dir(str(project_id), str(s.id))
