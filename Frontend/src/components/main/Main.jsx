@@ -50,50 +50,7 @@ const Main = () => {
 							</p>
 							<p>How Can i Help You Today?</p>
 						</div>
-						<div className="cards">
-							<div
-								className="card"
-								onClick={() =>
-									handleCardClick("A circle morphs into a square with smooth color fade.")
-								}
-							>
-								<p>A circle morphs into a square with smooth color fade.</p>
-								<img src={assets.compass_icon} alt="" />
-							</div>
-							<div
-								className="card"
-								onClick={() =>
-									handleCardClick(
-										"Write the equation E = mc^2 with a subtle camera push."
-									)
-								}
-							>
-								<p>Write the equation E = mc^2 with a subtle camera push.</p>
-								<img src={assets.message_icon} alt="" />
-							</div>
-							<div
-								className="card"
-								onClick={() =>
-									handleCardClick(
-										"Show a number line from -2 to 2 with ticks and labels."
-									)
-								}
-							>
-								<p>Show a number line from -2 to 2 with ticks and labels.</p>
-								<img src={assets.bulb_icon} alt="" />
-							</div>
-							<div
-								className="card"
-								onClick={() => {
-									handleCardClick(
-										"Animate a simple bar chart with three bars growing upward."
-									);
-								}}
-							>
-								<p>Animate a simple bar chart with three bars growing upward.</p>
-								<img src={assets.code_icon} alt="" />
-							</div>
-						</div>
+						
 					</>
 				) : (
 					<div className="result">
