@@ -39,10 +39,10 @@ async def render_shot(
     scene_path.write_text(code, encoding="utf-8")
 
     quality = settings.manim_quality.lstrip("-")
-    if quality.startswith("p"):
-        quality_flag = f"-{quality}"
-    else:
-        quality_flag = f"-p{quality}"
+
+    # using no -p for preview
+    quality_flag = f"-{quality}"
+    
     cmd = [
         "manim",
         str(scene_path.name),
