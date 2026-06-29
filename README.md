@@ -180,7 +180,7 @@ cd backend
 ## Create virtual environment
 
 ```bash
-python3 -m venv venv
+python -m venv venv
 ```
 
 ---
