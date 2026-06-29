@@ -8,7 +8,7 @@ from beanie.odm.fields import PydanticObjectId
 
 from app.models.project import Project
 from app.models.shot import Shot
-from app.utils.file_storage import absolute_video_path, export_final_path, storage_root
+from app.utils.file_storage import absolute_video_path, export_final_path, project_root, storage_root
 from app.renderer.video_merge import merge_videos_moviepy
 
 logger = logging.getLogger(__name__)
@@ -56,5 +56,5 @@ async def export_project_video(project_id: PydanticObjectId) -> tuple[bool, str,
     if not ok:
         logger.error("merge failed: %s", log)
         return False, log, None
-    rel = f"projects/{project_id}/final_output.mp4"
+    rel = f"projects/{project_id}/export/final_output.mp4"
     return True, "ok", rel
