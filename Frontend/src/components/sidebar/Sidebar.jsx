@@ -20,6 +20,8 @@ const Sidebar = () => {
 		createNewShot,
 		selectShot,
 		deleteShot,
+		runExport,
+		exporting,
 	} = useContext(Context);
 
 	const loadPreviousPrompt = async (prompt) => {
@@ -84,7 +86,20 @@ const Sidebar = () => {
 						))}
 						{currentProject ? (
 							<>
-								<p className="recent-title">Shots</p>
+								<p className="recent-title">Project actions</p>
+						<div className="new-chat" style={{ cursor: "default", gap: "0.75rem" }}>
+							<button
+								type="button"
+								className="toolbar-btn"
+								onClick={() => {
+									runExport().catch(console.error);
+								}}
+								disabled={!currentProject || exporting}
+							>
+								{exporting ? "Merging…" : "Merge & Download"}
+							</button>
+						</div>
+						<p className="recent-title">Shots</p>
 								<div
 									className="new-chat"
 									onClick={() => {

@@ -37,8 +37,18 @@ const ContextProvider = (props) => {
 		const p = await endpoints.project(id);
 		setCurrentProject(p);
 		setShots(p.shots || []);
+		if (p.shots?.length) {
+			const sameProjectCurrentShot = currentShot?.project_id === p.id ? p.shots.find((s) => s.id === currentShot.id) : null;
+			const selectedShot = sameProjectCurrentShot ?? p.shots[0];
+			setCurrentShot(selectedShot);
+			setShowResults(true);
+			setResultData("");
+			setRecentPrompt(selectedShot.user_prompt || "");
+		} else {
+			setCurrentShot(null);
+		}
 		return p;
-	}, []);
+	}, [currentShot]);
 
 	const refreshShot = useCallback(async (shotId) => {
 		const s = await endpoints.getShot(shotId);
@@ -70,8 +80,6 @@ const ContextProvider = (props) => {
 	const selectProject = async (id) => {
 		setError("");
 		await loadProject(id);
-		setCurrentShot(null);
-		newChat();
 	};
 
 	const deleteProject = async (id) => {
@@ -102,6 +110,9 @@ const ContextProvider = (props) => {
 		setError("");
 		const s = await endpoints.getShot(shot.id);
 		setCurrentShot(s);
+		setShowResults(true);
+		setResultData("");
+		setRecentPrompt(s.user_prompt || "");
 	};
 
 	const deleteShot = async (shotId) => {
@@ -252,7 +263,15 @@ const ContextProvider = (props) => {
 		setError("");
 		try {
 			const res = await endpoints.exportProject(currentProject.id);
-			window.open(res.video_url, "_blank", "noopener,noreferrer");
+			const url = res.video_url;
+			const filename = `${currentProject.name.replace(/[^a-z0-9_.-]/gi, "_") || "project"}-final.mp4`;
+			const a = document.createElement("a");
+			a.href = url;
+			a.download = filename;
+			a.style.display = "none";
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
 		} catch (e) {
 			setError(e.message || String(e));
 		} finally {
