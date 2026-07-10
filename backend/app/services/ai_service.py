@@ -13,6 +13,21 @@ from app.utils.code_validator import extract_python_from_markdown
 
 logger = logging.getLogger(__name__)
 
+API_RULES = """Manim Community Edition API rules (STRICT - target the CURRENT API, not old ManimGL/ManimCE<0.18):
+- Graphing: use `axes = Axes(...)` then `graph = axes.plot(lambda x: x**2, color=BLUE)`.
+  NEVER use `axes.get_graph(...)` or `GraphScene` — these are deprecated/removed.
+- Graph labels: use `axes.get_graph_label(graph, label="y=x^2")` OR place a
+  `MathTex(...)` manually with `.next_to(...)`. Do not invent method names.
+- Coordinate points on axes: use `axes.c2p(x, y)` (coords-to-point), not `axes.coords_to_point`.
+- Number lines/planes: `NumberPlane()`, `Axes()` — do not pass unsupported kwargs;
+  when unsure of an exact kwarg, prefer the simplest constructor call with no extra kwargs.
+- Any text with math notation must use `MathTex` (LaTeX) or `Tex`, and use raw strings
+  or properly escaped backslashes for LaTeX commands (e.g. r"x^2", r"\\frac{1}{2}").
+- Prefer well-established Manim classes/methods (Scene, Axes, Dot, Line, Circle, MathTex,
+  Tex, Create, Write, FadeIn, FadeOut, Transform, ValueTracker, always_redraw) over
+  obscure or guessed APIs.
+"""
+
 SYSTEM_GENERATE = """You are an expert Manim Community Edition animator.
 
 Output rules (STRICT - MUST FOLLOW):
@@ -30,7 +45,8 @@ Output rules (STRICT - MUST FOLLOW):
 - Self-contained only (no files, no network, no subprocess, no os/sys usage).
 - Must be renderable as: manim scene.py SceneName -ql
 - Choose a clear Scene class name (e.g. RunningBoyScene).
-"""
+
+""" + API_RULES
 
 
 SYSTEM_EDIT = """You revise Manim Community Edition Python based on the user.
@@ -45,7 +61,8 @@ Output rules (STRICT - MUST FOLLOW):
 - Do NOT truncate or omit any part of the file.
 - Ensure full structure: imports → class → construct() → end of file.
 - No os, subprocess, sys, pathlib, tempfile, or network usage in user-facing code.
-"""
+
+""" + API_RULES
 
 
 SYSTEM_FIX = """You repair Manim Community Edition Python that failed to render.
@@ -59,7 +76,11 @@ Output rules (STRICT - MUST FOLLOW):
 - The output must always be a FULL executable file, never partial.
 - Do NOT stop early under any condition.
 - Ensure structure is complete: imports → class → construct() → end of file.
-"""
+- If the error log mentions get_graph, GraphScene, coords_to_point, or any
+  AttributeError on Axes/Mobject, it is almost certainly a deprecated-API call —
+  replace it per the API rules below rather than only patching the symptom.
+
+""" + API_RULES
 
 def _strip_noise(text: str) -> str:
     text = (text or "").strip()

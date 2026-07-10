@@ -189,6 +189,12 @@ async def render_shot_task(shot_id: PydanticObjectId, try_fix: bool = False) -> 
     fix_attempts = 0
     render_attempts = 0
 
+    # try_fix=True (the "Render + AI fix" button) allows a couple of extra
+    # repair cycles. try_fix=False still gets ONE automatic repair-and-retry
+    # pass, because failing silently on the very first render is worse UX
+    # than trying the AI's own fix before giving up.
+    max_fix_attempts = 2 if try_fix else 1
+
     while render_attempts < 3:
         render_attempts += 1
         ok, log, rel = await render_shot_video(str(s.project_id), str(s.id), current_code)
@@ -196,7 +202,7 @@ async def render_shot_task(shot_id: PydanticObjectId, try_fix: bool = False) -> 
         if ok:
             return await save_render_result(s, rel, combined_log)
 
-        if fix_attempts >= 2:
+        if fix_attempts >= max_fix_attempts:
             break
 
         fix_attempts += 1
@@ -207,9 +213,8 @@ async def render_shot_task(shot_id: PydanticObjectId, try_fix: bool = False) -> 
         s = await Shot.get(shot_id)
         s = await save_generated_code(s, fixed_code, prompt=None)
         current_code = fixed_code
-
-        # If the user requested an explicit fix, allow a second repair attempt.
-        if not try_fix:
-            break
+        # Loop continues so the freshly-fixed code actually gets rendered,
+        # instead of being saved and discarded without ever being tried.
 
     return await save_render_result(s, None, combined_log)
+
