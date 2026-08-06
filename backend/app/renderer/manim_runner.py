@@ -34,17 +34,23 @@ async def render_shot(
     if not scene_name:
         return False, "Could not detect Scene class name", None
 
+    manim_bin = shutil.which("manim")
+    if not manim_bin:
+        return (
+            False,
+            "Executable 'manim' not found in PATH. Ensure manim is installed in your active virtual environment.",
+            None,
+        )
+
     shot_dir.mkdir(parents=True, exist_ok=True)
     scene_path = shot_dir / "scene.py"
     scene_path.write_text(code, encoding="utf-8")
 
     quality = settings.manim_quality.lstrip("-")
-
-    # using no -p for preview
     quality_flag = f"-{quality}"
-    
+
     cmd = [
-        "manim",
+        manim_bin,
         str(scene_path.name),
         scene_name,
         quality_flag,
@@ -61,7 +67,9 @@ async def render_shot(
         env=_subprocess_env(),
     )
     try:
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=settings.render_timeout_sec)
+        stdout, stderr = await asyncio.wait_for(
+            proc.communicate(), timeout=settings.render_timeout_sec
+        )
     except asyncio.TimeoutError:
         proc.kill()
         return False, "Render timed out", None
@@ -72,7 +80,9 @@ async def render_shot(
     if proc.returncode != 0:
         return False, log, None
 
-    mp4s = sorted(shot_dir.rglob("*.mp4"), key=lambda p: p.stat().st_mtime, reverse=True)
+    mp4s = sorted(
+        shot_dir.rglob("*.mp4"), key=lambda p: p.stat().st_mtime, reverse=True
+    )
     if not mp4s:
         return False, log + "\nNo mp4 produced.", None
 

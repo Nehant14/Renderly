@@ -27,8 +27,14 @@ export async function api(path, options = {}) {
 	if (options.body && !headers["Content-Type"]) {
 		headers["Content-Type"] = "application/json";
 	}
-	const res = await fetch(url, { ...options, headers });
-	const text = await res.text();
+	let res;
+	let text;
+	try {
+		res = await fetch(url, { ...options, headers });
+		text = await res.text();
+	} catch (err) {
+		throw new Error(err?.message ?? "Network request failed");
+	}
 	if (!res.ok) {
 		throw new Error(parseErrorDetail(text));
 	}
