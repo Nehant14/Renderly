@@ -83,6 +83,7 @@ const ContextProvider = (props) => {
 		const p = await endpoints.createProject(defaultName());
 		await refreshProjects();
 		await loadProject(p.id);
+		alert(`Project "${p.name}" created!`);
 	};
 
 	const selectProject = async (id) => {
