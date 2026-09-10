@@ -20,12 +20,9 @@ const Main = () => {
 		runRender,
 		runRegenerate,
 		runExport,
+		extended,
+		setExtended,
 	} = useContext(Context);
-
-	{/* Main prompt function */}
-	const handleCardClick = (promptText) => {
-		setInput(promptText);
-	};
 
 	const handleKeyDown = (e) => {
 		if (e.key === "Enter" && !e.shiftKey) {
@@ -37,7 +34,21 @@ const Main = () => {
 	const busy = loading || renderLoading;
 
 	return (
-		<div className="main">
+		<div
+			className="main"
+			onClick={() => {
+				if (extended) setExtended(false);
+			}}
+		>
+			{extended && (
+				<div
+					className="sidebar-overlay"
+					onClick={(e) => {
+						e.stopPropagation();
+						setExtended(false);
+					}}
+				/>
+			)}
 			<div className="nav">
 				<p>Renderly</p>
 			</div>

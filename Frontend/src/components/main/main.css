@@ -1,8 +1,22 @@
 .main{
     flex: 1;
     min-height: 100vh;
+    margin-left: 68px;
+    width: calc(100% - 68px);
     padding-bottom: 25vh;
     position: relative;
+    min-width: 0;
+}
+.sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    background: rgba(0, 0, 0, 0.18);
+    cursor: pointer;
+    animation: fadeIn 0.2s ease;
 }
 .main .nav{
     display: flex;
@@ -18,6 +32,7 @@
 }
 .main-container{
     max-width: 900px;
+    width: 100%;
     margin: auto;
 }
 .main-container .greet{
@@ -63,10 +78,13 @@
 .main-bottom {
     position: absolute;
     bottom: 0;
+    left: 0;
+    right: 0;
     width: 100%;
     max-width: 900px;
     padding: 0px 20px;
     margin: auto;
+    z-index: 20;
 }
 .search-box{
     display: flex;
@@ -205,4 +223,22 @@ animation: loader 4s infinite linear;
     margin-top: 8px;
     font-size: 14px;
     color: #666;
+}
+
+@media (max-width: 600px) {
+    .main {
+        margin-left: 56px;
+        width: calc(100% - 56px);
+    }
+    .main-container .greet {
+        font-size: 32px;
+        margin: 30px 0;
+    }
+    .search-box {
+        padding: 8px 14px;
+        gap: 10px;
+    }
+    .search-box input {
+        font-size: 15px;
+    }
 }

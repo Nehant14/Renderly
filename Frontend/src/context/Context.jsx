@@ -15,7 +15,6 @@ const ContextProvider = (props) => {
 
 	const [input, setInput] = useState("");
 	const [recentPrompt, setRecentPrompt] = useState("");
-	const [prevPrompts, setPrevPrompts] = useState([]);
 	const [showResults, setShowResults] = useState(false);
 	const [loading, setLoading] = useState(false);
 	const [renderLoading, setRenderLoading] = useState(false);
@@ -26,6 +25,7 @@ const ContextProvider = (props) => {
 	const [currentProject, setCurrentProject] = useState(null);
 	const [shots, setShots] = useState([]);
 	const [currentShot, setCurrentShot] = useState(null);
+	const [extended, setExtended] = useState(false);
 
 	const refreshProjects = useCallback(async () => {
 		const list = await endpoints.projects();
@@ -42,10 +42,17 @@ const ContextProvider = (props) => {
 			const selectedShot = sameProjectCurrentShot ?? p.shots[0];
 			setCurrentShot(selectedShot);
 			setShowResults(true);
-			setResultData("");
+			setResultData(
+				selectedShot.generated_manim_code
+					? `<p><b>Manim code.</b> Scene: <code>${selectedShot.scene_class_name || "?"}</code></p><pre style="white-space:pre-wrap;font-size:13px;background:#f6f7f8;padding:12px;border-radius:8px;max-height:240px;overflow:auto;">${escapeHtml(selectedShot.generated_manim_code.slice(0, 4000))}</pre>`
+					: ""
+			);
 			setRecentPrompt(selectedShot.user_prompt || "");
 		} else {
 			setCurrentShot(null);
+			setShowResults(false);
+			setResultData("");
+			setRecentPrompt("");
 		}
 		return p;
 	}, [currentShot]);
@@ -68,6 +75,7 @@ const ContextProvider = (props) => {
 		setResultData("");
 		setError("");
 		setRecentPrompt("");
+		setCurrentShot(null);
 	};
 
 	const createProject = async () => {
@@ -102,8 +110,11 @@ const ContextProvider = (props) => {
 		}
 		setError("");
 		const s = await endpoints.createShot(currentProject.id, { title: "Shot" });
-		await loadProject(currentProject.id);
+		setShots((prev) => [...prev.filter((x) => x.id !== s.id), s]);
 		setCurrentShot(s);
+		setShowResults(true);
+		setResultData("");
+		setRecentPrompt("");
 	};
 
 	const selectShot = async (shot) => {
@@ -111,7 +122,11 @@ const ContextProvider = (props) => {
 		const s = await endpoints.getShot(shot.id);
 		setCurrentShot(s);
 		setShowResults(true);
-		setResultData("");
+		setResultData(
+			s.generated_manim_code
+				? `<p><b>Manim code.</b> Scene: <code>${s.scene_class_name || "?"}</code></p><pre style="white-space:pre-wrap;font-size:13px;background:#f6f7f8;padding:12px;border-radius:8px;max-height:240px;overflow:auto;">${escapeHtml(s.generated_manim_code.slice(0, 4000))}</pre>`
+				: ""
+		);
 		setRecentPrompt(s.user_prompt || "");
 	};
 
@@ -123,51 +138,48 @@ const ContextProvider = (props) => {
 		if (currentProject) await loadProject(currentProject.id);
 	};
 
-	const appendHistory = (text) => {
-		setPrevPrompts((prev) => {
-			const next = [text, ...prev.filter((p) => p !== text)];
-			return next.slice(0, 20);
-		});
-	};
-
 	const onSent = async (prompt) => {
 		const text = (prompt ?? input).trim();
 		if (!text) return;
+		if (loading || renderLoading) return;
+
+		if (!currentProject) {
+			setError("Select or create a project first.");
+			return;
+		}
+
+		setInput("");
 		setRecentPrompt(text);
 		setShowResults(true);
 		setLoading(true);
 		setRenderLoading(false);
 		setResultData("");
 		setError("");
-		appendHistory(text);
 
 		try {
-			if (!currentProject) {
-				throw new Error("Create or open a project from the sidebar first.");
-			}
-
-			// Use a local variable so we always work with the latest shot ref
+			// Inside a project, create a new shot and process prompt on it
+			// If currentShot exists but is an empty shot (no code, prompt, or video), reuse it
 			let shot = currentShot;
-			if (!shot) {
+			const isCurrentShotEmpty =
+				shot &&
+				!shot.generated_manim_code &&
+				!shot.user_prompt &&
+				!shot.video_url;
+
+			if (!isCurrentShotEmpty) {
 				shot = await endpoints.createShot(currentProject.id, { title: "Shot" });
-				await loadProject(currentProject.id);
-				setCurrentShot(shot);
+				setShots((prev) => [...prev.filter((x) => x.id !== shot.id), shot]);
 			}
+			setCurrentShot(shot);
 
-			// Decide generate vs edit based on whether code already exists on THIS shot
-			let updated;
-			if (!shot.generated_manim_code) {
-				updated = await endpoints.generate(shot.id, text);
-			} else {
-				updated = await endpoints.edit(shot.id, text);
-			}
-
+			// Generate manim code for the new shot
+			const updated = await endpoints.generate(shot.id, text);
 			setCurrentShot(updated);
 			setShots((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
 
 			const codePreview = updated.generated_manim_code?.slice(0, 4000) || "(no code returned)";
 			setResultData(
-				`<p><b>Manim code updated.</b> Scene: <code>${updated.scene_class_name || "?"}</code></p>` +
+				`<p><b>Manim code generated.</b> Scene: <code>${updated.scene_class_name || "?"}</code></p>` +
 				`<pre style="white-space:pre-wrap;font-size:13px;background:#f6f7f8;padding:12px;border-radius:8px;max-height:240px;overflow:auto;">${escapeHtml(codePreview)}</pre>`
 			);
 
@@ -197,7 +209,6 @@ const ContextProvider = (props) => {
 			// Always clear both loading states
 			setLoading(false);
 			setRenderLoading(false);
-			setInput("");
 		}
 	};
 
@@ -280,8 +291,6 @@ const ContextProvider = (props) => {
 	};
 
 	const contextValue = {
-		prevPrompts,
-		setPrevPrompts,
 		onSent,
 		setRecentPrompt,
 		recentPrompt,
@@ -308,6 +317,8 @@ const ContextProvider = (props) => {
 		runRegenerate,
 		runExport,
 		refreshShot,
+		extended,
+		setExtended,
 	};
 
 	return (

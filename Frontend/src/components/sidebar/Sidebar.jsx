@@ -4,11 +4,9 @@ import { useContext, useState } from "react";
 import { Context } from "../../context/Context";
 
 const Sidebar = () => {
-	const [extended, setExtended] = useState(false);
 	const {
-		onSent,
-		prevPrompts,
-		setRecentPrompt,
+		extended,
+		setExtended,
 		newChat,
 		projects,
 		currentProject,
@@ -24,13 +22,8 @@ const Sidebar = () => {
 		exporting,
 	} = useContext(Context);
 
-	const loadPreviousPrompt = async (prompt) => {
-		setRecentPrompt(prompt);
-		await onSent(prompt);
-	};
-
 	return (
-		<div className="sidebar">
+		<div className={`sidebar ${extended ? "extended" : ""}`}>
 			<div className="top">
 				<img
 					src={assets.menu_icon}
@@ -136,21 +129,7 @@ const Sidebar = () => {
 								))}
 							</>
 						) : null}
-						<p className="recent-title">Recent prompts</p>
-						{prevPrompts.map((item, index) => {
-							return (
-								<div
-									key={`${item}-${index}`}
-									onClick={() => {
-										loadPreviousPrompt(item);
-									}}
-									className="recent-entry"
-								>
-									<img src={assets.message_icon} alt="" />
-									<p>{item.slice(0, 18)}...</p>
-								</div>
-							);
-						})}
+
 					</div>
 				) : null}
 			</div>
